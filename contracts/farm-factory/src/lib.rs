@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Bytes};
 
 #[derive(Clone)]
 #[contracttype]
@@ -34,5 +34,50 @@ impl FarmFactory {
         owner.require_auth();
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage().instance().set(&DataKey::FarmCount, &0u64);
+    }
+
+    /// Deploy a new xLP farm contract
+    pub fn deploy_farm(
+        env: Env,
+        lp_token: Address,
+        reward_token: Address,
+        emission_rate: u64,
+        duration: u64,
+        farm_wasm_hash: Bytes,
+    ) -> Address {
+        let owner: Address = env.storage().instance().get(&DataKey::Owner)
+            .expect("Factory not initialized");
+        owner.require_auth();
+
+        let current_time = env.ledger().timestamp();
+        let end_time = current_time + duration;
+        
+        let farm_count: u64 = env.storage().instance()
+            .get(&DataKey::FarmCount)
+            .unwrap_or(0);
+
+        let config = FarmConfig {
+            lp_token: lp_token.clone(),
+            reward_token: reward_token.clone(),
+            emission_rate,
+            start_time: current_time,
+            end_time,
+            owner: owner.clone(),
+        };
+
+        // Generate salt for unique farm address
+        let salt = Bytes::from_array(&env, &[farm_count as u8; 32]);
+        
+        // Deploy the farm contract
+        let farm_address = env
+            .deployer()
+            .with_current_contract(salt)
+            .deploy(farm_wasm_hash);
+
+        // Store farm configuration
+        env.storage().instance().set(&DataKey::Farm(farm_count), &config);
+        env.storage().instance().set(&DataKey::FarmCount, &(farm_count + 1));
+
+        farm_address
     }
 }
