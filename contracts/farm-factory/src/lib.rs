@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Bytes};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec, Bytes};
 
 #[derive(Clone)]
 #[contracttype]
@@ -78,6 +78,12 @@ impl FarmFactory {
         env.storage().instance().set(&DataKey::Farm(farm_count), &config);
         env.storage().instance().set(&DataKey::FarmCount, &(farm_count + 1));
 
+        // Emit event
+        env.events().publish(
+            (Symbol::new(&env, "farm_deployed"),),
+            (farm_address.clone(), lp_token, reward_token, emission_rate)
+        );
+
         farm_address
     }
 
@@ -95,5 +101,19 @@ impl FarmFactory {
     pub fn get_owner(env: Env) -> Address {
         env.storage().instance().get(&DataKey::Owner)
             .expect("Factory not initialized")
+    }
+
+    /// Update factory owner
+    pub fn set_owner(env: Env, new_owner: Address) {
+        let current_owner: Address = env.storage().instance().get(&DataKey::Owner)
+            .expect("Factory not initialized");
+        current_owner.require_auth();
+
+        env.storage().instance().set(&DataKey::Owner, &new_owner);
+        
+        env.events().publish(
+            (Symbol::new(&env, "owner_updated"),),
+            (current_owner, new_owner)
+        );
     }
 }
