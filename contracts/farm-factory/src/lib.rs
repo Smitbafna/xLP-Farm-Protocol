@@ -80,4 +80,20 @@ impl FarmFactory {
 
         farm_address
     }
+
+    /// Get farm configuration by index
+    pub fn get_farm(env: Env, farm_id: u64) -> Option<FarmConfig> {
+        env.storage().instance().get(&DataKey::Farm(farm_id))
+    }
+
+    /// Get total number of deployed farms
+    pub fn get_farm_count(env: Env) -> u64 {
+        env.storage().instance().get(&DataKey::FarmCount).unwrap_or(0)
+    }
+
+    /// Get factory owner
+    pub fn get_owner(env: Env) -> Address {
+        env.storage().instance().get(&DataKey::Owner)
+            .expect("Factory not initialized")
+    }
 }
