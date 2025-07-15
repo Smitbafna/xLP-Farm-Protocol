@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, Symbol,
+    contract, contractimpl, contracttype, Address, Env, Symbol, Vec,
     token::{TokenClient}, panic_with_error
 };
 
@@ -17,7 +17,7 @@ pub struct HarvestConfig {
 pub enum DataKey {
     Config,
     AuthorizedFarm(Address),
-    UserVault(Address),
+    UserVault(Address), // Maps user to their DeFindex vault
 }
 
 #[derive(Clone)]
@@ -28,6 +28,7 @@ pub enum Error {
     Unauthorized = 3,
     InvalidAmount = 4,
     SwapFailed = 5,
+    VaultDepositFailed = 6,
 }
 
 #[contract]
@@ -76,7 +77,7 @@ impl HarvestModule {
         reward_amount: u64,
     ) {
         // Verify the caller is an authorized farm
-        let caller = env.current_contract_address();
+        let caller = env.current_contract_address(); // In practice, this would be the calling farm
         if !env.storage().instance().has(&DataKey::AuthorizedFarm(caller)) {
             panic_with_error!(&env, Error::Unauthorized);
         }
@@ -124,6 +125,45 @@ impl HarvestModule {
         env.storage().instance().get(&DataKey::UserVault(user))
     }
 
+    /// Update configuration (admin only)
+    pub fn update_config(
+        env: Env,
+        soroswap_aggregator: Option<Address>,
+        defindex_vault_factory: Option<Address>,
+    ) {
+        let mut config = Self::get_config(&env);
+        config.admin.require_auth();
+
+        if let Some(aggregator) = soroswap_aggregator {
+            config.soroswap_aggregator = aggregator;
+        }
+        
+        if let Some(vault_factory) = defindex_vault_factory {
+            config.defindex_vault_factory = vault_factory;
+        }
+
+        env.storage().instance().set(&DataKey::Config, &config);
+    }
+
+    /// Emergency withdraw function (admin only)
+    pub fn emergency_withdraw(
+        env: Env,
+        token: Address,
+        to: Address,
+        amount: u64,
+    ) {
+        let config = Self::get_config(&env);
+        config.admin.require_auth();
+
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &to, &(amount as i128));
+
+        env.events().publish(
+            (Symbol::new(&env, "emergency_withdraw"),),
+            (token, to, amount)
+        );
+    }
+
     // Internal helper functions
     fn get_config(env: &Env) -> HarvestConfig {
         env.storage().instance().get(&DataKey::Config)
@@ -136,9 +176,23 @@ impl HarvestModule {
         token_in: &Address,
         amount_in: u64,
     ) -> u64 {
+        // This would call the Soroswap Aggregator contract
+        // For now, we'll simulate a successful swap
+        // In reality, this would involve:
+        // 1. Approve tokens to aggregator
+        // 2. Call aggregator's swap function
+        // 3. Return the amount of output tokens received
+
         let token_client = TokenClient::new(env, token_in);
         token_client.approve(&env.current_contract_address(), aggregator, &(amount_in as i128), &(env.ledger().sequence() + 100));
 
+        // Simulate aggregator call - in reality this would be:
+        // let result: u64 = env.invoke_contract(
+        //     aggregator,
+        //     &Symbol::new(env, "swap"),
+        //     (token_in.clone(), usdc_address, amount_in).into(),
+        // );
+        
         // For simulation, assume 1:1 swap rate
         let swapped_amount = amount_in;
 
@@ -160,9 +214,12 @@ impl HarvestModule {
             return vault;
         }
 
-        // Create a default vault - placeholder for now
+        // Create a default vault for the user via DeFindex Vault Factory
+        // This would call the DeFindex Vault Factory contract
+        // For simulation, we'll use a placeholder address
         let vault_address = Address::from_string(&String::from_str(env, "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQAYBFDKDCFW"));
 
+        // Store the vault for future use
         env.storage().instance().set(&DataKey::UserVault(user.clone()), &vault_address);
 
         env.events().publish(
@@ -174,9 +231,18 @@ impl HarvestModule {
     }
 
     fn deposit_to_vault(env: &Env, vault: &Address, amount: u64) {
+        // This would call the DeFindex vault's deposit function
+        // For simulation, we'll emit an event
         env.events().publish(
             (Symbol::new(env, "deposited_to_vault"),),
             (vault.clone(), amount)
         );
+
+        // In reality, this would be:
+        // env.invoke_contract::<()>(
+        //     vault,
+        //     &Symbol::new(env, "deposit"),
+        //     (amount,).into(),
+        // );
     }
 }
