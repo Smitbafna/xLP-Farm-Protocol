@@ -1,5 +1,8 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, panic_with_error};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, Address, Env, Symbol,
+    panic_with_error
+};
 
 #[derive(Clone)]
 #[contracttype]
@@ -49,6 +52,35 @@ impl HarvestModule {
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
+    }
+
+    /// Authorize a farm contract to use this harvest module
+    pub fn authorize_farm(env: Env, farm: Address) {
+        let config = Self::get_config(&env);
+        config.admin.require_auth();
+
+        env.storage().instance().set(&DataKey::AuthorizedFarm(farm.clone()), &true);
+        
+        env.events().publish(
+            (Symbol::new(&env, "farm_authorized"),),
+            (farm,)
+        );
+    }
+
+    /// Set user's preferred DeFindex vault
+    pub fn set_user_vault(env: Env, user: Address, vault: Address) {
+        user.require_auth();
+        env.storage().instance().set(&DataKey::UserVault(user.clone()), &vault);
+        
+        env.events().publish(
+            (Symbol::new(&env, "user_vault_set"),),
+            (user, vault)
+        );
+    }
+
+    /// Get user's vault address
+    pub fn get_user_vault(env: Env, user: Address) -> Option<Address> {
+        env.storage().instance().get(&DataKey::UserVault(user))
     }
 
     // Internal helper functions
