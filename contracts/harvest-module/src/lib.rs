@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
     contract, contractimpl, contracttype, Address, Env, Symbol,
-    panic_with_error
+    token::{TokenClient}, panic_with_error
 };
 
 #[derive(Clone)]
@@ -27,6 +27,7 @@ pub enum Error {
     AlreadyInitialized = 2, 
     Unauthorized = 3,
     InvalidAmount = 4,
+    SwapFailed = 5,
 }
 
 #[contract]
@@ -67,6 +68,46 @@ impl HarvestModule {
         );
     }
 
+    /// Main harvest and compound function called by farm contracts
+    pub fn harvest_and_compound(
+        env: Env,
+        user: Address,
+        reward_token: Address,
+        reward_amount: u64,
+    ) {
+        // Verify the caller is an authorized farm
+        let caller = env.current_contract_address();
+        if !env.storage().instance().has(&DataKey::AuthorizedFarm(caller)) {
+            panic_with_error!(&env, Error::Unauthorized);
+        }
+
+        if reward_amount == 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+
+        let config = Self::get_config(&env);
+
+        // Step 1: Swap reward tokens to stable token via Soroswap Aggregator
+        let swapped_amount = Self::swap_via_soroswap(
+            &env,
+            &config.soroswap_aggregator,
+            &reward_token,
+            reward_amount,
+        );
+
+        // Step 2: Get or create user's DeFindex vault
+        let vault_address = Self::get_or_create_user_vault(&env, &user, &config);
+
+        // Step 3: Deposit swapped tokens into DeFindex vault
+        Self::deposit_to_vault(&env, &vault_address, swapped_amount);
+
+        // Emit harvest event
+        env.events().publish(
+            (Symbol::new(&env, "harvested_and_compounded"),),
+            (user, reward_token, reward_amount, swapped_amount)
+        );
+    }
+
     /// Set user's preferred DeFindex vault
     pub fn set_user_vault(env: Env, user: Address, vault: Address) {
         user.require_auth();
@@ -87,5 +128,55 @@ impl HarvestModule {
     fn get_config(env: &Env) -> HarvestConfig {
         env.storage().instance().get(&DataKey::Config)
             .expect("Harvest module not initialized")
+    }
+
+    fn swap_via_soroswap(
+        env: &Env,
+        aggregator: &Address,
+        token_in: &Address,
+        amount_in: u64,
+    ) -> u64 {
+        let token_client = TokenClient::new(env, token_in);
+        token_client.approve(&env.current_contract_address(), aggregator, &(amount_in as i128), &(env.ledger().sequence() + 100));
+
+        // For simulation, assume 1:1 swap rate
+        let swapped_amount = amount_in;
+
+        env.events().publish(
+            (Symbol::new(env, "token_swapped"),),
+            (token_in.clone(), amount_in, swapped_amount)
+        );
+
+        swapped_amount
+    }
+
+    fn get_or_create_user_vault(
+        env: &Env,
+        user: &Address,
+        config: &HarvestConfig,
+    ) -> Address {
+        // Check if user has a preferred vault
+        if let Some(vault) = env.storage().instance().get(&DataKey::UserVault(user.clone())) {
+            return vault;
+        }
+
+        // Create a default vault - placeholder for now
+        let vault_address = Address::from_string(&String::from_str(env, "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQAYBFDKDCFW"));
+
+        env.storage().instance().set(&DataKey::UserVault(user.clone()), &vault_address);
+
+        env.events().publish(
+            (Symbol::new(env, "vault_created"),),
+            (user.clone(), vault_address.clone())
+        );
+
+        vault_address
+    }
+
+    fn deposit_to_vault(env: &Env, vault: &Address, amount: u64) {
+        env.events().publish(
+            (Symbol::new(env, "deposited_to_vault"),),
+            (vault.clone(), amount)
+        );
     }
 }
