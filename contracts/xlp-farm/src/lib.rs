@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, Symbol,
-    token::{TokenClient}, panic_with_error
+    contract, contractimpl, contracttype, Address, Env, Symbol, Map, 
+    token::{self, TokenClient}, panic_with_error
 };
 
 #[derive(Clone)]
@@ -134,6 +134,73 @@ impl XLPFarm {
         env.events().publish(
             (Symbol::new(&env, "staked"),),
             (user, amount, user_info.amount)
+        );
+    }
+
+    /// Unstake LP tokens and claim rewards
+    pub fn unstake(env: Env, user: Address, amount: u64) {
+        user.require_auth();
+
+        let mut pool_info = Self::get_pool_info(&env);
+        let mut user_info = Self::get_user_info(&env, &user);
+
+        if amount > user_info.amount {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+
+        Self::update_pool(&env, &mut pool_info);
+
+        // Calculate pending rewards
+        let pending = (user_info.amount * pool_info.acc_reward_per_share) / 1e12 as u64 - user_info.reward_debt;
+        if pending > 0 {
+            Self::safe_reward_transfer(&env, &pool_info.reward_token, &user, pending);
+        }
+
+        // Update user info
+        user_info.amount -= amount;
+        user_info.reward_debt = (user_info.amount * pool_info.acc_reward_per_share) / 1e12 as u64;
+
+        // Update pool info
+        pool_info.total_staked -= amount;
+
+        // Transfer LP tokens back to user
+        let lp_token = TokenClient::new(&env, &pool_info.lp_token);
+        lp_token.transfer(&env.current_contract_address(), &user, &(amount as i128));
+
+        // Save updated data
+        env.storage().instance().set(&DataKey::UserInfo(user.clone()), &user_info);
+        env.storage().instance().set(&DataKey::PoolInfo, &pool_info);
+
+        // Emit event
+        env.events().publish(
+            (Symbol::new(&env, "unstaked"),),
+            (user, amount, user_info.amount)
+        );
+    }
+
+    /// Claim rewards without unstaking
+    pub fn claim_rewards(env: Env, user: Address) {
+        user.require_auth();
+
+        let mut pool_info = Self::get_pool_info(&env);
+        let mut user_info = Self::get_user_info(&env, &user);
+
+        Self::update_pool(&env, &mut pool_info);
+
+        let pending = (user_info.amount * pool_info.acc_reward_per_share) / 1e12 as u64 - user_info.reward_debt;
+        
+        if pending > 0 {
+            Self::safe_reward_transfer(&env, &pool_info.reward_token, &user, pending);
+        }
+
+        user_info.reward_debt = (user_info.amount * pool_info.acc_reward_per_share) / 1e12 as u64;
+
+        env.storage().instance().set(&DataKey::UserInfo(user.clone()), &user_info);
+        env.storage().instance().set(&DataKey::PoolInfo, &pool_info);
+
+        env.events().publish(
+            (Symbol::new(&env, "claimed"),),
+            (user, pending)
         );
     }
 
