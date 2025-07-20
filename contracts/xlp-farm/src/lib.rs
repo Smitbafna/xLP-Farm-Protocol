@@ -204,6 +204,45 @@ impl XLPFarm {
         );
     }
 
+    /// Trigger harvest and auto-compound
+    pub fn harvest_and_compound(env: Env, user: Address) {
+        let pool_info = Self::get_pool_info(&env);
+        let user_info = Self::get_user_info(&env, &user);
+
+        if user_info.amount == 0 {
+            return;
+        }
+
+        // Calculate pending rewards
+        let pending = Self::pending_reward(&env, &user);
+        
+        if pending > 0 {
+            // Call harvest module to handle auto-compounding
+            env.invoke_contract::<()>(
+                &pool_info.harvest_module,
+                &Symbol::new(&env, "harvest_and_compound"),
+                (user.clone(), pool_info.reward_token.clone(), pending).into(),
+            );
+        }
+    }
+
+    /// Get pending rewards for a user
+    pub fn pending_reward(env: &Env, user: &Address) -> u64 {
+        let pool_info = Self::get_pool_info(env);
+        let user_info = Self::get_user_info(env, user);
+
+        let mut acc_reward_per_share = pool_info.acc_reward_per_share;
+        let current_time = env.ledger().timestamp();
+
+        if current_time > pool_info.last_reward_time && pool_info.total_staked != 0 {
+            let multiplier = Self::get_multiplier(&pool_info.last_reward_time, &current_time, &pool_info.end_time);
+            let reward = multiplier * pool_info.emission_rate;
+            acc_reward_per_share += (reward * 1e12 as u64) / pool_info.total_staked;
+        }
+
+        (user_info.amount * acc_reward_per_share) / 1e12 as u64 - user_info.reward_debt
+    }
+
     /// Get user information
     pub fn get_user_info(env: &Env, user: &Address) -> UserInfo {
         env.storage().instance().get(&DataKey::UserInfo(user.clone()))
