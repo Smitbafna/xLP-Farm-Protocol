@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Farm, FarmStorage } from '../../lib/farmStorage';
 
 interface LPTokenOption {
   address: string;
@@ -28,6 +29,8 @@ export default function AdminPanel() {
   
   const [lpTokens, setLpTokens] = useState<LPTokenOption[]>([]);
   const [estimatedApr, setEstimatedApr] = useState<number | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
 
   useEffect(() => {
     // Mock LP tokens data - replace with actual Soroswap contract calls
@@ -54,14 +57,83 @@ export default function AdminPanel() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleCreateFarm = () => {
+  const handleCreateFarm = async () => {
     if (!isFormValid()) {
       alert('Please fill in all required fields');
       return;
     }
     
-    console.log('Creating farm with data:', formData);
-    alert('Farm creation functionality coming soon!');
+    setIsCreating(true);
+    try {
+      console.log('Creating farm with data:', formData);
+      
+      // Get the selected LP token
+      const selectedLpToken = lpTokens.find(token => token.address === formData.lpToken);
+      if (!selectedLpToken) {
+        alert('Invalid LP token selected');
+        return;
+      }
+
+      // Create new farm data
+      const newFarmData: Omit<Farm, 'id' | 'createdAt'> = {
+        lpPair: selectedLpToken.pair,
+        rewardToken: formData.rewardToken,
+        apr: estimatedApr || 0,
+        tvl: selectedLpToken.tvl,
+        timeLeft: `${formData.duration} days`,
+        strategy: getStrategyName(formData.linkedVault),
+        strategyApy: Math.random() * 10 + 5, // Mock strategy APY
+        isActive: true,
+        lpTokenAddress: formData.lpToken,
+        emissionRate: formData.emissionRate,
+        duration: formData.duration,
+        linkedVault: formData.linkedVault,
+      };
+
+      // Mock API call delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Save to localStorage
+      const newFarm = FarmStorage.addFarm(newFarmData);
+      console.log('Farm created:', newFarm);
+      
+      alert(`Farm created successfully! 🎉\nFarm ID: ${newFarm.id}`);
+      
+      // Reset form
+      setFormData({
+        lpToken: '',
+        rewardToken: '',
+        emissionRate: '',
+        duration: '',
+        linkedVault: '',
+      });
+      setPreviewMode(false);
+    } catch (error) {
+      console.error('Error creating farm:', error);
+      alert('Error creating farm. Please try again.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const getStrategyName = (vaultId: string): string => {
+    const strategies: Record<string, string> = {
+      'vault1': 'DeFindex Lending Vault',
+      'vault2': 'DeFindex LP Strategy',
+      'vault3': 'Soroswap Auto-Compound',
+      'defindex_usdc': 'DeFindex USDC Vault',
+      'defindex_xlm': 'DeFindex XLM Vault',
+      'soroswap_auto': 'Soroswap Auto-Compound',
+    };
+    return strategies[vaultId] || 'Custom Strategy';
+  };
+
+  const handlePreviewToggle = () => {
+    if (!isFormValid()) {
+      alert('Please fill in all required fields to preview');
+      return;
+    }
+    setPreviewMode(!previewMode);
   };
 
   const isFormValid = () => {
@@ -172,22 +244,62 @@ export default function AdminPanel() {
                   </select>
                 </div>
 
-                {/* Create Button */}
-                <div className="pt-4">
+                {/* Action Buttons */}
+                <div className="flex space-x-4 pt-4">
+                  <button
+                    onClick={handlePreviewToggle}
+                    disabled={!isFormValid()}
+                    className="flex-1 py-3 px-4 border border-indigo-600 text-indigo-600 rounded-md hover:bg-indigo-50 disabled:border-gray-300 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {previewMode ? 'Edit Farm' : 'Preview Farm'}
+                  </button>
                   <button
                     onClick={handleCreateFarm}
-                    disabled={!isFormValid()}
-                    className="w-full py-3 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    disabled={!isFormValid() || isCreating}
+                    className="flex-1 py-3 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                   >
-                    Create Farm
+                    {isCreating ? 'Creating...' : 'Create Farm'}
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Stats Section */}
+          {/* Preview/Stats Section */}
           <div className="space-y-6">
+            {/* Farm Preview */}
+            {previewMode && isFormValid() && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold mb-4">Farm Preview</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">LP Pair:</span>
+                    <span className="font-medium">{selectedLpToken?.pair}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Emission:</span>
+                    <span className="font-medium">{formData.emissionRate} tokens/day</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Duration:</span>
+                    <span className="font-medium">{formData.duration} days</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Strategy:</span>
+                    <span className="font-medium text-purple-600">
+                      {formData.linkedVault.charAt(0).toUpperCase() + formData.linkedVault.slice(1)} Vault
+                    </span>
+                  </div>
+                  {estimatedApr && (
+                    <div className="flex justify-between pt-2 border-t">
+                      <span className="text-gray-600">Est. APR:</span>
+                      <span className="font-semibold text-green-600">{estimatedApr.toFixed(1)}%</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Estimated Economics */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-lg font-semibold mb-4">Economics Estimation</h3>
@@ -197,6 +309,15 @@ export default function AdminPanel() {
                   <span className="font-medium">
                     {formData.emissionRate && formData.duration 
                       ? `${(parseFloat(formData.emissionRate) * parseFloat(formData.duration)).toLocaleString()} tokens`
+                      : '—'
+                    }
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Est. Value (USD):</span>
+                  <span className="font-medium">
+                    {formData.emissionRate && formData.duration 
+                      ? `$${(parseFloat(formData.emissionRate) * parseFloat(formData.duration) * 0.5).toLocaleString()}`
                       : '—'
                     }
                   </span>
@@ -227,6 +348,17 @@ export default function AdminPanel() {
                   <span className="font-semibold">~0.6 XLM</span>
                 </div>
               </div>
+            </div>
+
+            {/* Help */}
+            <div className="bg-blue-50 rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-2 text-blue-900">Need Help?</h3>
+              <p className="text-sm text-blue-800 mb-3">
+                Creating a farm deploys a new smart contract that manages LP staking and reward distribution.
+              </p>
+              <Link href="/docs" className="text-blue-600 text-sm hover:underline">
+                View Documentation →
+              </Link>
             </div>
           </div>
         </div>
