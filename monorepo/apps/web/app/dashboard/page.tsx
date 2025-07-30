@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Farm, FarmStorage } from '../../lib/farmStorage';
 
 interface UserFarm {
   id: number;
@@ -27,61 +28,51 @@ export default function MyFarmsDashboard() {
   const [userFarms, setUserFarms] = useState<UserFarm[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [allFarms, setAllFarms] = useState<Farm[]>([]);
 
   useEffect(() => {
-    // Mock loading delay
-    setTimeout(() => {
-      const mockUserFarms: UserFarm[] = [
-        {
-          id: 1,
-          lpPair: 'USDC-ETH',
-          rewardToken: 'STELLAR',
-          stakedAmount: 1250.50,
-          earnedRewards: 42.18,
-          compoundedAmount: 156.70,
-          apr: 125.5,
-          strategyApy: 12.8,
-          isActive: true,
-          lastHarvest: '2 hours ago',
-        },
-        {
-          id: 2,
-          lpPair: 'XLM-USDC',
-          rewardToken: 'DEFINDEX',
-          stakedAmount: 890.25,
-          earnedRewards: 15.67,
-          compoundedAmount: 89.45,
-          apr: 98.2,
-          strategyApy: 15.2,
-          isActive: true,
-          lastHarvest: '1 day ago',
-        },
-        {
-          id: 3,
-          lpPair: 'ETH-BTC',
-          rewardToken: 'SOROSWAP',
-          stakedAmount: 567.80,
-          earnedRewards: 8.23,
-          compoundedAmount: 34.12,
-          apr: 87.3,
-          strategyApy: 8.9,
-          isActive: true,
-          lastHarvest: '3 hours ago',
-        },
-      ];
-      
-      // Calculate summary
-      const mockSummary: DashboardSummary = {
-        totalStaked: mockUserFarms.reduce((sum, farm) => sum + farm.stakedAmount, 0),
-        totalEarned: mockUserFarms.reduce((sum, farm) => sum + farm.earnedRewards, 0),
-        totalCompounded: mockUserFarms.reduce((sum, farm) => sum + farm.compoundedAmount, 0),
-        dailyYield: mockUserFarms.reduce((sum, farm) => sum + (farm.stakedAmount * farm.apr / 365 / 100), 0),
-      };
-      
-      setUserFarms(mockUserFarms);
-      setSummary(mockSummary);
-      setLoading(false);
-    }, 1000);
+    // Load farms from localStorage and generate mock user positions
+    const loadUserFarms = () => {
+      try {
+        const farms = FarmStorage.getFarms();
+        setAllFarms(farms);
+        
+        // Mock user positions - in real app, this would come from contracts
+        const mockUserFarms: UserFarm[] = farms
+          .filter(farm => farm.isActive)
+          .slice(0, 3) // Show only first 3 active farms as user farms
+          .map(farm => ({
+            id: farm.id,
+            lpPair: farm.lpPair,
+            rewardToken: farm.rewardToken,
+            stakedAmount: Math.random() * 1000 + 100,
+            earnedRewards: Math.random() * 50 + 10,
+            compoundedAmount: Math.random() * 200 + 50,
+            apr: farm.apr,
+            strategyApy: farm.strategyApy || 0,
+            isActive: farm.isActive,
+            lastHarvest: ['2 hours ago', '1 day ago', '3 hours ago'][Math.floor(Math.random() * 3)] || '2 hours ago',
+          }));
+
+        setUserFarms(mockUserFarms);
+
+        // Calculate summary from user farms
+        const mockSummary: DashboardSummary = {
+          totalStaked: mockUserFarms.reduce((sum, farm) => sum + farm.stakedAmount, 0),
+          totalEarned: mockUserFarms.reduce((sum, farm) => sum + farm.earnedRewards, 0),
+          totalCompounded: mockUserFarms.reduce((sum, farm) => sum + farm.compoundedAmount, 0),
+          dailyYield: mockUserFarms.reduce((sum, farm) => sum + (farm.stakedAmount * farm.apr / 365 / 100), 0),
+        };
+
+        setSummary(mockSummary);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error loading user farms:', error);
+        setLoading(false);
+      }
+    };
+
+    loadUserFarms();
   }, []);
 
   const handleClaimAll = () => {
@@ -188,8 +179,12 @@ export default function MyFarmsDashboard() {
                         <h3 className="text-lg font-semibold">{farm.lpPair}</h3>
                         <div className="flex items-center space-x-2">
                           <span className="text-sm text-gray-600">Earn {farm.rewardToken}</span>
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Active
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            farm.isActive 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {farm.isActive ? 'Active' : 'Ended'}
                           </span>
                         </div>
                       </div>
@@ -233,12 +228,23 @@ export default function MyFarmsDashboard() {
                   {/* Last Harvest Info */}
                   <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center text-sm text-gray-600">
                     <span>Last harvest: {farm.lastHarvest}</span>
-                    <span>Auto-compound: 🟢 Active</span>
+                    <span>Auto-compound: {farm.isActive ? '🟢 Active' : '🔴 Inactive'}</span>
                   </div>
                 </div>
               ))}
             </div>
           )}
+        </div>
+
+        {/* Portfolio Performance */}
+        <div className="mt-12 bg-white rounded-lg p-6 shadow-sm">
+          <h3 className="text-xl font-semibold mb-4">Portfolio Performance</h3>
+          <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center">
+            <div className="text-center text-gray-500">
+              <div className="text-lg font-medium">Performance Chart</div>
+              <div className="text-sm">Total value & yield over time</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
