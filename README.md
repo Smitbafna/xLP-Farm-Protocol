@@ -74,10 +74,10 @@ flowchart TD
 
   %% Styling
   classDef admin fill:#000000,stroke:#333333,stroke-width:2px,color:#ffffff;  %% Black background with white text for Admin/DAO
-  classDef contract fill:#f5f5f5,stroke:#cccccc,stroke-width:1px,color:#666666;  %% Dull gray for contracts
-  classDef service fill:#f8f8f8,stroke:#dddddd,stroke-width:1px,color:#666666;   %% Dull light gray for services
-  classDef user fill:#f0f0f0,stroke:#cccccc,stroke-width:1px,color:#666666;      %% Dull gray for user
-  classDef logic fill:#f3f3f3,stroke:#d0d0d0,stroke-width:1px,color:#666666;     %% Dull light gray for logic
+  classDef contract fill:#000000,stroke:#cccccc,stroke-width:2px,color:#ffffff;  %% Dull gray for contracts
+  classDef service fill:#000000,stroke:#dddddd,stroke-width:2px,color:#ffffff;   %% Dull light gray for services
+  classDef user fill:#000000,stroke:#cccccc,stroke-width:2px,color:#ffffff;      %% Dull gray for user
+  classDef logic fill:#000000,stroke:#d0d0d0,stroke-width:2px,color:#ffffff;     %% Dull light gray for logic
 
 class Admin admin
 class Farm,Factory contract
