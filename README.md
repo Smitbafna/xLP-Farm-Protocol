@@ -1,7 +1,3 @@
-Thanks for the nudge. Here's your **full updated README** — rewritten for clarity, persuasion, and alignment with your new **“liquidity loyalty layer”** narrative, while keeping technical accuracy.
-
----
-
 ## 🪙 xLP Farm Protocol
 
 **Turn short-term farming into long-term loyalty.**
@@ -16,7 +12,7 @@ By converting short-term incentives into long-term growth, xLP helps protocols r
 
 ---
 
-## 🔧 Features
+##  Features
 
 ### 🔹 **Custom LP Farming Campaigns**
 
@@ -77,11 +73,13 @@ flowchart TD
   VaultFactory --> Strategy[DeFindex Strategy Execution]
 
   %% Styling
-  classDef contract fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;       %% Soft green with bold dark green border
-classDef service fill:#ede7f6,stroke:#5e35b1,stroke-width:2px;       %% Lavender with deep purple border
-classDef user fill:#fff3e0,stroke:#fb8c00,stroke-width:2px;          %% Light orange with bright orange border
-classDef logic fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;         %% Soft blue with navy border
+  classDef admin fill:#000000,stroke:#333333,stroke-width:2px,color:#ffffff;  %% Black background with white text for Admin/DAO
+  classDef contract fill:#f5f5f5,stroke:#cccccc,stroke-width:1px,color:#666666;  %% Dull gray for contracts
+  classDef service fill:#f8f8f8,stroke:#dddddd,stroke-width:1px,color:#666666;   %% Dull light gray for services
+  classDef user fill:#f0f0f0,stroke:#cccccc,stroke-width:1px,color:#666666;      %% Dull gray for user
+  classDef logic fill:#f3f3f3,stroke:#d0d0d0,stroke-width:1px,color:#666666;     %% Dull light gray for logic
 
+class Admin admin
 class Farm,Factory contract
 class Stake,Unstake,Harvest,Swap,Deposit logic
 class User user
